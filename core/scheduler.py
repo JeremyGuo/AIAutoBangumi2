@@ -454,7 +454,7 @@ class AutoBangumiScheduler:
             db.add(file_record)
             
             # 如果需要创建硬链接 (视频文件或字幕文件)
-            if CONFIG.hardlink.enable and (is_video or file_type == "subtitle"):
+            if CONFIG.hardlink.enable and (is_video or file_type == "subtitle") and is_main_episode:
                 hardlink_result = await self._create_hardlink(db, source, file_record, False)
                 if hardlink_result.startswith("/"):
                     logger.info(f"硬链接创建成功: {hardlink_result}")

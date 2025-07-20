@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends, HTTPException, status
