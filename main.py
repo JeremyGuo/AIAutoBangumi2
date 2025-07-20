@@ -101,11 +101,13 @@ async def catch_all(request: Request, full_path: str):
     # For all other paths, serve the main page (SPA routing)
     return templates.TemplateResponse("index.html", {"request": request})
 
+from core.config import CONFIG
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=CONFIG.general.address,
+        port=CONFIG.general.listen
         reload=True,
         log_level="info"
     )
