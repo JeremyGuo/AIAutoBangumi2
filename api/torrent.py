@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -7,6 +7,7 @@ from typing import List
 from models.session import get_db
 from models.models import Torrent, File, Source, User
 from core.user import get_current_user
+from core.scheduler import scheduler
 
 router = APIRouter()
 
@@ -100,3 +101,77 @@ async def get_torrent_files(
             for file in files
         ]
     }
+
+@router.post("/file/{file_id}/hardlink")
+async def create_manual_hardlink(
+    file_id: int,
+    force_overwrite: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """手动为文件创建硬链接"""
+    try:
+        # 检查文件是否存在
+        file_record = await db.get(File, file_id)
+        if not file_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文件不存在"
+            )
+        
+        # 调用调度器的硬链接创建方法
+        result = await scheduler.file_make_hardlink(db, file_id, force_overwrite)
+        
+        # 判断结果是否为成功的路径
+        if result.startswith("/") or result.startswith("\\"):
+            return {
+                "status": "success",
+                "message": "硬链接创建成功",
+                "hardlink_path": result
+            }
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "status": "error",
+                    "message": result
+                }
+            )
+            
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": "error",
+                "message": f"创建硬链接失败: {str(e)}"
+            }
+        )
+
+@router.get("/file/{file_id}/info")
+async def get_file_info(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """获取文件详细信息"""
+    try:
+        file_info = await scheduler.get_file_info(db, file_id)
+        if not file_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文件不存在"
+            )
+        
+        return {
+            "status": "success",
+            "file": file_info
+        }
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": "error", 
+                "message": f"获取文件信息失败: {str(e)}"
+            }
+        )

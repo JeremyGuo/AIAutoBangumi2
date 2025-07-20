@@ -429,18 +429,23 @@ class AutoBangumiScheduler:
             if not is_important:
                 continue
             
+            # 判断文件类型
+            file_type = "episode" if is_main_episode else "special"
+            if file_name.lower().endswith(('.srt', '.ass', '.ssa', '.vtt', '.sub')):
+                file_type = "subtitle"
+            
             # 创建文件记录
             file_record = File(
                 torrent_id=torrent.id,
                 name=file_name,
                 path=file_path,
                 size=file_size,
-                file_type="episode" if is_main_episode else "special",
+                file_type=file_type,
                 created_at=datetime.utcnow()
             )
             
             # 提取剧集信息
-            if is_main_episode and source.media_type == "tv":
+            if (is_main_episode or file_type == "subtitle") and source.media_type == "tv":
                 episode = await self._extract_episode_number(source, file_name)
                 if episode:
                     file_record.extracted_episode = episode
@@ -448,9 +453,9 @@ class AutoBangumiScheduler:
             
             db.add(file_record)
             
-            # 如果需要创建硬链接
-            if CONFIG.hardlink.enable and is_video:
-                hardlink_result = await self._create_hardlink(db, source, file_record)
+            # 如果需要创建硬链接 (视频文件或字幕文件)
+            if CONFIG.hardlink.enable and (is_video or file_type == "subtitle"):
+                hardlink_result = await self._create_hardlink(db, source, file_record, False)
                 if hardlink_result.startswith("/"):
                     logger.info(f"硬链接创建成功: {hardlink_result}")
                 else:
@@ -473,13 +478,14 @@ class AutoBangumiScheduler:
             logger.error(f"Error extracting episode from {filename}: {e}")
             return None
     
-    async def _create_hardlink(self, db: Any, source: Source, file_record: File) -> str:
+    async def _create_hardlink(self, db: Any, source: Source, file_record: File, force_overwrite: bool = False) -> str:
         """创建硬链接
         
         Args:
             db: 数据库session
             source: 源信息
             file_record: 文件记录
+            force_overwrite: 是否强制覆盖已存在的硬链接
             
         Returns:
             str: 创建的硬链接路径或错误信息
@@ -510,45 +516,25 @@ class AutoBangumiScheduler:
                 file_record.hardlink_error = error_msg
                 return error_msg
             
-            # 获取文件扩展名
-            _, file_ext = os.path.splitext(source_path)
+            # 获取文件扩展名和基本名称
+            file_basename, file_ext = os.path.splitext(source_path)
             
-            # 根据媒体类型构建目标路径
-            if source.media_type == "tv":
-                # 对于电视剧
-                season = source.season or 1
-                episode = file_record.final_episode
-                
-                if episode is None:
-                    error_msg = "无法获取剧集编号"
+            # 根据媒体类型和文件类型构建目标路径
+            dest_path = await self._build_hardlink_path(source, file_record, file_ext)
+            if not dest_path:
+                error_msg = "无法构建硬链接目标路径"
+                file_record.hardlink_status = "failed"
+                file_record.hardlink_error = error_msg
+                return error_msg
+            
+            # 检查是否有多个文件会硬链接到同一个路径（仅在非强制覆盖模式下）
+            if not force_overwrite:
+                conflict_check = await self._check_hardlink_conflicts(db, dest_path, file_record.id)
+                if conflict_check:
+                    error_msg = f"硬链接冲突: 多个文件将指向同一路径 {dest_path}，存在冲突的文件: {conflict_check}"
                     file_record.hardlink_status = "failed"
                     file_record.hardlink_error = error_msg
                     return error_msg
-                
-                # 创建目标路径: output_base/<source title>/Season <season>/
-                season_dir = os.path.join(
-                    CONFIG.hardlink.output_base, 
-                    source.title, 
-                    f"Season {season}"
-                )
-                os.makedirs(season_dir, exist_ok=True)
-                
-                # 格式化季和集数
-                season_str = str(season).zfill(2)
-                episode_str = str(episode).zfill(2)
-                
-                # 生成文件名: <source title> S<season>E<episode><extension>
-                file_name = f"{source.title} S{season_str}E{episode_str}{file_ext}"
-                dest_path = os.path.join(season_dir, file_name)
-            else:
-                # 对于电影
-                # 创建目标路径: output_base/<source title>/
-                movie_dir = os.path.join(CONFIG.hardlink.output_base, source.title)
-                os.makedirs(movie_dir, exist_ok=True)
-                
-                # 使用源标题作为文件名
-                file_name = f"{source.title}{file_ext}"
-                dest_path = os.path.join(movie_dir, file_name)
             
             # 确保目标目录存在
             dest_dir = os.path.dirname(dest_path)
@@ -557,7 +543,7 @@ class AutoBangumiScheduler:
             
             logger.info(f"创建硬链接: {source_path} -> {dest_path}")
             
-            # 如果目标文件已存在，先删除
+            # 如果目标文件已存在，直接删除（不管是否同一文件）
             if os.path.exists(dest_path):
                 os.unlink(dest_path)
                 logger.info(f"删除已存在的目标文件: {dest_path}")
@@ -583,12 +569,112 @@ class AutoBangumiScheduler:
             
             return error_msg
     
-    async def file_make_hardlink(self, db: AsyncSession, file_id: int) -> str:
+    async def _build_hardlink_path(self, source: Source, file_record: File, file_ext: str) -> Optional[str]:
+        """构建硬链接目标路径"""
+        try:
+            if source.media_type == "tv":
+                # 对于电视剧
+                season = source.season or 1
+                episode = file_record.final_episode
+                
+                if episode is None:
+                    return None
+                
+                # 创建目标路径: output_base/<source title>/Season <season>/
+                season_dir = os.path.join(
+                    CONFIG.hardlink.output_base, 
+                    source.title, 
+                    f"Season {season}"
+                )
+                
+                # 格式化季和集数
+                season_str = str(season).zfill(2)
+                episode_str = str(episode).zfill(2)
+                
+                # 处理字幕文件的特殊命名
+                if file_record.file_type == "subtitle":
+                    # 检查字幕语言标识
+                    file_name_lower = file_record.name.lower()
+                    if "chs" in file_name_lower and "cht" in file_name_lower:
+                        # 同时包含简繁，使用简体标识
+                        subtitle_suffix = ".chs&cht"
+                    elif "chs" in file_name_lower:
+                        subtitle_suffix = ".chs"
+                    elif "cht" in file_name_lower:
+                        subtitle_suffix = ".cht"
+                    elif "sc" in file_name_lower:
+                        subtitle_suffix = ".sc"
+                    elif "tc" in file_name_lower:
+                        subtitle_suffix = ".tc"
+                    else:
+                        subtitle_suffix = ""
+                    
+                    file_name = f"{source.title} S{season_str}E{episode_str}{subtitle_suffix}{file_ext}"
+                else:
+                    # 视频文件或其他文件
+                    file_name = f"{source.title} S{season_str}E{episode_str}{file_ext}"
+                
+                return os.path.join(season_dir, file_name)
+            else:
+                # 对于电影
+                movie_dir = os.path.join(CONFIG.hardlink.output_base, source.title)
+                
+                if file_record.file_type == "subtitle":
+                    # 电影字幕处理
+                    file_name_lower = file_record.name.lower()
+                    if "chs" in file_name_lower and "cht" in file_name_lower:
+                        subtitle_suffix = ".chs&cht"
+                    elif "chs" in file_name_lower:
+                        subtitle_suffix = ".chs"
+                    elif "cht" in file_name_lower:
+                        subtitle_suffix = ".cht"
+                    elif "sc" in file_name_lower:
+                        subtitle_suffix = ".sc"
+                    elif "tc" in file_name_lower:
+                        subtitle_suffix = ".tc"
+                    else:
+                        subtitle_suffix = ""
+                    
+                    file_name = f"{source.title}{subtitle_suffix}{file_ext}"
+                else:
+                    file_name = f"{source.title}{file_ext}"
+                
+                return os.path.join(movie_dir, file_name)
+                
+        except Exception as e:
+            logger.error(f"构建硬链接路径失败: {e}")
+            return None
+    
+    async def _check_hardlink_conflicts(self, db: Any, dest_path: str, current_file_id: int) -> Optional[str]:
+        """检查硬链接冲突"""
+        try:
+            # 查询是否有其他文件记录指向同一个目标路径
+            result = await db.execute(
+                select(File).where(
+                    File.hardlink_path == dest_path,
+                    File.id != current_file_id
+                )
+            )
+            conflict_files = result.scalars().all()
+            
+            if conflict_files:
+                conflict_names = [f.name for f in conflict_files]
+                return ", ".join(conflict_names)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"检查硬链接冲突失败: {e}")
+            return None
+    
+    
+    async def file_make_hardlink(self, db: AsyncSession, file_id: int, force_overwrite: bool = False) -> str:
         """为文件创建硬链接
         
         Args:
             db: 数据库session
             file_id: 文件ID
+            force_overwrite: 是否强制覆盖
             
         Returns:
             str: 创建的硬链接路径或错误信息
@@ -619,7 +705,7 @@ class AutoBangumiScheduler:
                 return "无法获取源信息"
             
             # 使用统一的硬链接创建方法
-            result = await self._create_hardlink(db, source, file_record)
+            result = await self._create_hardlink(db, source, file_record, force_overwrite)
             
             # 提交数据库更改
             await self._safe_commit(db)

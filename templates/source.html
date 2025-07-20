@@ -280,7 +280,7 @@
         
         .file-item {
             display: grid;
-            grid-template-columns: 1fr auto auto auto;
+            grid-template-columns: 1fr auto auto auto auto;
             gap: 15px;
             padding: 10px;
             background: #f7fafc;
@@ -309,6 +309,77 @@
             border-radius: 8px;
             font-size: 0.7rem;
             font-weight: 500;
+        }
+        
+        .file-hardlink-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+        }
+        
+        .hardlink-status-badge {
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        
+        .hardlink-completed {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+        
+        .hardlink-failed {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        
+        .hardlink-pending {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .hardlink-actions {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .btn-create-hardlink {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-create-hardlink:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-force-hardlink {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .btn-force-hardlink:hover {
+            background: #c53030;
+        }
+        
+        .btn-small:disabled {
+            background: #cbd5e0;
+            color: #a0aec0;
+            cursor: not-allowed;
         }
         
         .type-episode {
@@ -399,6 +470,16 @@
             .torrent-hash {
                 font-size: 0.8rem;
                 word-break: break-all;
+            }
+            
+            .hardlink-actions {
+                flex-direction: column;
+                gap: 3px;
+            }
+            
+            .btn-small {
+                width: 100%;
+                text-align: center;
             }
         }
     </style>
@@ -546,13 +627,41 @@
                                     </div>
                                     <div v-else class="files-grid">
                                         <div v-for="file in torrentFiles[torrent.id]" :key="file.id" class="file-item">
-                                            <div class="file-name">{{ file.name }}</div>
+                                            <div class="file-name">
+                                                {{ file.name }}
+                                                <div v-if="file.hardlink_path" style="font-size: 0.8rem; color: #718096; margin-top: 2px;">
+                                                    硬链接: {{ file.hardlink_path }}
+                                                </div>
+                                                <div v-if="file.hardlink_error" style="font-size: 0.8rem; color: #c53030; margin-top: 2px;">
+                                                    错误: {{ file.hardlink_error }}
+                                                </div>
+                                            </div>
                                             <div class="file-size">{{ formatFileSize(file.size) }}</div>
                                             <div v-if="file.final_episode" class="file-episode">
                                                 第{{ file.final_episode }}集
                                             </div>
                                             <div class="file-type" :class="'type-' + (file.file_type || 'other')">
                                                 {{ getFileTypeText(file.file_type) }}
+                                            </div>
+                                            <div class="file-hardlink-status">
+                                                <span v-if="file.hardlink_status" 
+                                                      class="hardlink-status-badge" 
+                                                      :class="'hardlink-' + file.hardlink_status">
+                                                    {{ getHardlinkStatusText(file.hardlink_status) }}
+                                                </span>
+                                                <div class="hardlink-actions">
+                                                    <button v-if="file.hardlink_status !== 'completed'" 
+                                                            class="btn-small btn-create-hardlink"
+                                                            @click="createHardlink(file.id, false)"
+                                                            :disabled="creatingHardlink[file.id]">
+                                                        {{ creatingHardlink[file.id] ? '创建中...' : '创建硬链接' }}
+                                                    </button>
+                                                    <button class="btn-small btn-force-hardlink"
+                                                            @click="createHardlink(file.id, true)"
+                                                            :disabled="creatingHardlink[file.id]">
+                                                        {{ creatingHardlink[file.id] ? '强制中...' : '强制覆盖' }}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -578,7 +687,8 @@
                     loading: true,
                     torrentsLoading: false,
                     error: null,
-                    sourceId: null
+                    sourceId: null,
+                    creatingHardlink: {} // 跟踪每个文件的硬链接创建状态
                 }
             },
             
@@ -687,6 +797,50 @@
                         'other': '其他'
                     };
                     return typeMap[fileType] || '其他';
+                },
+                
+                getHardlinkStatusText(status) {
+                    const statusMap = {
+                        'completed': '已完成',
+                        'failed': '失败',
+                        'pending': '等待中'
+                    };
+                    return statusMap[status] || status;
+                },
+                
+                async createHardlink(fileId, forceOverwrite = false) {
+                    try {
+                        // 设置创建状态
+                        this.creatingHardlink[fileId] = true;
+                        
+                        const formData = new FormData();
+                        formData.append('force_overwrite', forceOverwrite);
+                        
+                        const response = await axios.post(`/api/torrent/file/${fileId}/hardlink`, formData);
+                        
+                        if (response.data.status === 'success') {
+                            alert(`硬链接创建成功！\n路径: ${response.data.hardlink_path}`);
+                            
+                            // 刷新文件列表以显示最新状态
+                            for (let torrentId in this.torrentFiles) {
+                                const files = this.torrentFiles[torrentId];
+                                const fileIndex = files.findIndex(f => f.id === fileId);
+                                if (fileIndex !== -1) {
+                                    await this.loadTorrentFiles(parseInt(torrentId));
+                                    break;
+                                }
+                            }
+                        } else {
+                            alert(`硬链接创建失败：${response.data.message}`);
+                        }
+                        
+                    } catch (error) {
+                        console.error('创建硬链接失败:', error);
+                        alert(`创建硬链接失败：${error.response?.data?.message || error.message}`);
+                    } finally {
+                        // 清除创建状态
+                        delete this.creatingHardlink[fileId];
+                    }
                 },
                 
                 getSourceIdFromUrl() {

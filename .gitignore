@@ -49,6 +49,7 @@ logs/
 
 # Database
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
 
