@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIAutoBangumi2 - 源管理</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        .nav a:hover {
+            background-color: rgba(255,255,255,0.2);
+        }
+        
+        .main {
+            padding: 30px 0;
+        }
+        
+        .toolbar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c53030;
+        }
+        
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+        
+        .search-box {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+        }
+        
+        .sources-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        }
+        
+        .source-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .source-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        
+        .source-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .source-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #2d3748;
+        }
+        
+        .source-url {
+            color: #718096;
+            font-size: 0.9rem;
+            word-break: break-all;
+        }
+        
+        .source-info {
+            padding: 15px 20px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .info-label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+        
+        .info-value {
+            color: #2d3748;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge-rss {
+            background: #e6fffa;
+            color: #2c7a7b;
+        }
+        
+        .badge-magnet {
+            background: #f0fff4;
+            color: #38a169;
+        }
+        
+        .badge-tv {
+            background: #fef5e7;
+            color: #dd6b20;
+        }
+        
+        .badge-movie {
+            background: #edf2f7;
+            color: #4a5568;
+        }
+        
+        .source-actions {
+            padding: 15px 20px;
+            background: #f7fafc;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .page-btn {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .page-btn:hover {
+            background: #f7fafc;
+        }
+        
+        .page-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #718096;
+        }
+        
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 50px;
+            color: #718096;
+        }
+        
+        @media (max-width: 768px) {
+            .sources-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .toolbar {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .search-box {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">AIAutoBangumi2</div>
+                    <nav class="nav">
+                        <a href="/">首页</a>
+                        <a href="/new_source.html">添加源</a>
+                        <span v-if="user">{{ user.username }}</span>
+                        <a href="/api/auth/logout" v-if="user">登出</a>
+                        <a href="/login.html" v-if="!user">登录</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="container">
+                <!-- 认证检查中显示 -->
+                <div v-if="!authChecked" class="loading">
+                    正在验证用户身份...
+                </div>
+
+                <!-- 已认证时显示主内容 -->
+                <template v-else-if="user">
+                    <div class="toolbar">
+                        <div>
+                            <input 
+                                v-model="searchQuery" 
+                                @input="filterSources"
+                                class="search-box" 
+                                placeholder="搜索源..."
+                            >
+                        </div>
+                        <div>
+                            <a href="/new_source.html" class="btn btn-primary">添加新源</a>
+                        </div>
+                    </div>
+
+                    <div v-if="error" class="error">
+                        {{ error }}
+                    </div>
+
+                    <div v-if="loading" class="loading">
+                        加载中...
+                    </div>
+
+                    <div v-else-if="filteredSources.length === 0" class="empty">
+                        {{ searchQuery ? '没有找到匹配的源' : '还没有添加任何源' }}
+                    </div>
+
+                    <div v-else class="sources-grid">
+                        <div 
+                            v-for="source in paginatedSources" 
+                            :key="source.id" 
+                            class="source-card"
+                        >
+                            <div class="source-header">
+                                <div class="source-title">{{ source.title }}</div>
+                                <div v-if="source.type !== 'magnet'" class="source-url">{{ source.url }}</div>
+                                <div v-else class="source-url" style="color: #666; font-style: italic;">磁力链接</div>
+                            </div>
+                            
+                            <div class="source-info">
+                                <div class="info-row">
+                                    <span class="info-label">类型:</span>
+                                    <span class="badge" :class="'badge-' + source.type">
+                                        {{ source.type.toUpperCase() }}
+                                    </span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">媒体:</span>
+                                    <span class="badge" :class="'badge-' + source.media_type">
+                                        {{ source.media_type === 'tv' ? '电视剧' : '电影' }}
+                                    </span>
+                                </div>
+                                <div v-if="source.season" class="info-row">
+                                    <span class="info-label">季度:</span>
+                                    <span class="info-value">第{{ source.season }}季</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">剧集偏移:</span>
+                                    <span class="info-value">{{ source.episode_offset }}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">检查间隔:</span>
+                                    <span class="info-value">{{ formatInterval(source.check_interval) }}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">最后检查:</span>
+                                    <span class="info-value">
+                                        {{ source.last_check ? formatDate(source.last_check) : '从未' }}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="source-actions">
+                                <a :href="'/source.html?id=' + source.id" class="btn btn-primary">查看详情</a>
+                                <button @click="deleteSource(source.id)" class="btn btn-danger">删除</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="totalPages > 1" class="pagination">
+                        <button 
+                            @click="currentPage = 1" 
+                            :disabled="currentPage === 1"
+                            class="page-btn"
+                        >
+                            首页
+                        </button>
+                        <button 
+                            @click="currentPage--" 
+                            :disabled="currentPage === 1"
+                            class="page-btn"
+                        >
+                            上一页
+                        </button>
+                        <button 
+                            v-for="page in visiblePages" 
+                            :key="page"
+                            @click="currentPage = page"
+                            :class="['page-btn', { active: currentPage === page }]"
+                        >
+                            {{ page }}
+                        </button>
+                        <button 
+                            @click="currentPage++" 
+                            :disabled="currentPage === totalPages"
+                            class="page-btn"
+                        >
+                            下一页
+                        </button>
+                        <button 
+                            @click="currentPage = totalPages" 
+                            :disabled="currentPage === totalPages"
+                            class="page-btn"
+                        >
+                            末页
+                        </button>
+                    </div>
+                </template>
+
+                <!-- 未认证时不显示任何内容，因为会自动跳转到登录页面 -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            data() {
+                return {
+                    sources: [],
+                    filteredSources: [],
+                    loading: true,
+                    error: null,
+                    searchQuery: '',
+                    currentPage: 1,
+                    pageSize: 20,
+                    user: null,  // 添加用户状态
+                    authChecked: false  // 添加认证检查状态
+                }
+            },
+            
+            computed: {
+                paginatedSources() {
+                    const start = (this.currentPage - 1) * this.pageSize;
+                    const end = start + this.pageSize;
+                    return this.filteredSources.slice(start, end);
+                },
+                
+                totalPages() {
+                    return Math.ceil(this.filteredSources.length / this.pageSize);
+                },
+                
+                visiblePages() {
+                    const pages = [];
+                    const start = Math.max(1, this.currentPage - 2);
+                    const end = Math.min(this.totalPages, this.currentPage + 2);
+                    
+                    for (let i = start; i <= end; i++) {
+                        pages.push(i);
+                    }
+                    
+                    return pages;
+                }
+            },
+            
+            methods: {
+                async checkAuth() {
+                    try {
+                        const response = await axios.get('/api/user/me');
+                        this.user = response.data;
+                        this.authChecked = true;
+                        return true;
+                    } catch (error) {
+                        if (error.response?.status === 401) {
+                            // 未登录，跳转到登录页面
+                            window.location.href = '/login.html';
+                            return false;
+                        }
+                        console.error('认证检查失败:', error);
+                        this.authChecked = true;
+                        return false;
+                    }
+                },
+
+                async loadSources() {
+                    try {
+                        this.loading = true;
+                        this.error = null;
+                        
+                        const response = await axios.get('/api/source/', {
+                            params: { start: 0, limit: 1000 } // 加载所有源进行前端分页
+                        });
+                        
+                        this.sources = response.data.sources;
+                        this.filteredSources = [...this.sources];
+                    } catch (error) {
+                        console.error('加载源失败:', error);
+                        this.error = error.response?.data?.detail || '加载源失败';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                filterSources() {
+                    if (!this.searchQuery.trim()) {
+                        this.filteredSources = [...this.sources];
+                    } else {
+                        const query = this.searchQuery.toLowerCase();
+                        this.filteredSources = this.sources.filter(source => 
+                            source.title.toLowerCase().includes(query) ||
+                            source.url.toLowerCase().includes(query) ||
+                            source.type.toLowerCase().includes(query) ||
+                            source.media_type.toLowerCase().includes(query)
+                        );
+                    }
+                    this.currentPage = 1; // 重置到第一页
+                },
+                
+                async deleteSource(sourceId) {
+                    if (!confirm('确定要删除这个源吗？此操作不可撤销。')) {
+                        return;
+                    }
+                    
+                    try {
+                        await axios.delete(`/api/source/${sourceId}`);
+                        
+                        // 从列表中移除
+                        this.sources = this.sources.filter(s => s.id !== sourceId);
+                        this.filterSources(); // 重新过滤
+                        
+                        alert('源已成功删除');
+                    } catch (error) {
+                        console.error('删除源失败:', error);
+                        alert(error.response?.data?.detail || '删除源失败');
+                    }
+                },
+                
+                formatDate(dateString) {
+                    const date = new Date(dateString);
+                    return date.toLocaleString('zh-CN');
+                },
+                
+                formatInterval(seconds) {
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    
+                    if (hours > 0) {
+                        return `${hours}小时${minutes > 0 ? minutes + '分钟' : ''}`;
+                    } else if (minutes > 0) {
+                        return `${minutes}分钟`;
+                    } else {
+                        return `${seconds}秒`;
+                    }
+                }
+            },
+            
+            mounted() {
+                this.checkAuth().then(isAuthenticated => {
+                    if (isAuthenticated) {
+                        this.loadSources();
+                    }
+                });
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户登录 - AIAutoBangumi2</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            margin: 20px;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            font-size: 2.2rem;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+        
+        .logo p {
+            color: #718096;
+            font-size: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f7fafc;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background: white;
+        }
+        
+        .form-input.error {
+            border-color: #e53e3e;
+        }
+        
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 25px;
+        }
+        
+        .checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+        
+        .checkbox-label {
+            font-size: 0.9rem;
+            color: #4a5568;
+            cursor: pointer;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            background: #cbd5e0;
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .alert-error {
+            background: #fed7d7;
+            color: #c53030;
+            border: 1px solid #feb2b2;
+        }
+        
+        .alert-success {
+            background: #c6f6d5;
+            color: #2f855a;
+            border: 1px solid #9ae6b4;
+        }
+        
+        .links {
+            text-align: center;
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .links a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .links a:hover {
+            text-decoration: underline;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 20px 0;
+            color: #a0aec0;
+            position: relative;
+        }
+        
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #e2e8f0;
+        }
+        
+        .divider span {
+            background: white;
+            padding: 0 15px;
+        }
+        
+        .demo-accounts {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .demo-title {
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .demo-account {
+            background: white;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .demo-account:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .demo-account:last-child {
+            margin-bottom: 0;
+        }
+        
+        .demo-info {
+            font-size: 0.8rem;
+            color: #718096;
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 10px;
+                padding: 30px 20px;
+            }
+            
+            .logo h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="login-container">
+            <div class="logo">
+                <h1>AIAutoBangumi2</h1>
+                <p>欢迎回来</p>
+            </div>
+
+            <div v-if="message" :class="['alert', 'alert-' + messageType]">
+                {{ message }}
+            </div>
+
+            <form @submit.prevent="login">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input 
+                        v-model="form.username"
+                        type="text" 
+                        class="form-input"
+                        :class="{ error: hasError }"
+                        placeholder="请输入用户名"
+                        required
+                        autofocus
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input 
+                        v-model="form.password"
+                        type="password" 
+                        class="form-input"
+                        :class="{ error: hasError }"
+                        placeholder="请输入密码"
+                        required
+                    >
+                </div>
+
+                <div class="remember-me">
+                    <input 
+                        v-model="form.rememberMe"
+                        type="checkbox" 
+                        class="checkbox"
+                        id="remember"
+                    >
+                    <label for="remember" class="checkbox-label">记住我</label>
+                </div>
+
+                <button type="submit" class="btn" :disabled="isSubmitting || !isFormValid">
+                    <span v-if="isSubmitting" class="loading-spinner"></span>
+                    {{ isSubmitting ? '登录中...' : '登录' }}
+                </button>
+            </form>
+
+            <div class="links">
+                <a href="/register.html">还没有账户？立即注册</a>
+            </div>
+
+            <!-- 演示账户（仅在开发环境显示） -->
+            <div v-if="showDemoAccounts" class="demo-accounts">
+                <div class="demo-title">演示账户 (开发模式)</div>
+                <div class="demo-account" @click="fillDemoAccount('admin', 'admin123')">
+                    <strong>管理员账户</strong>
+                    <div class="demo-info">用户名: admin / 密码: admin123</div>
+                </div>
+                <div class="demo-account" @click="fillDemoAccount('user', 'user123')">
+                    <strong>普通用户</strong>
+                    <div class="demo-info">用户名: user / 密码: user123</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            data() {
+                return {
+                    form: {
+                        username: '',
+                        password: '',
+                        rememberMe: false
+                    },
+                    message: '',
+                    messageType: 'error',
+                    isSubmitting: false,
+                    hasError: false,
+                    showDemoAccounts: false // 在开发环境中可以设置为true
+                }
+            },
+            
+            computed: {
+                isFormValid() {
+                    return this.form.username.trim() && this.form.password.trim();
+                }
+            },
+            
+            methods: {
+                async login() {
+                    if (!this.isFormValid) return;
+                    
+                    this.isSubmitting = true;
+                    this.message = '';
+                    this.hasError = false;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('username', this.form.username.trim());
+                        formData.append('password', this.form.password);
+                        
+                        const response = await axios.post('/api/auth/login', formData);
+                        
+                        this.message = '登录成功！正在跳转...';
+                        this.messageType = 'success';
+                        
+                        // 登录成功后跳转到首页
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 1000);
+                        
+                    } catch (error) {
+                        console.error('登录失败:', error);
+                        this.hasError = true;
+                        
+                        if (error.response?.status === 401) {
+                            this.message = '用户名或密码错误';
+                        } else {
+                            this.message = error.response?.data?.detail || '登录失败，请稍后再试';
+                        }
+                        this.messageType = 'error';
+                    } finally {
+                        this.isSubmitting = false;
+                    }
+                },
+                
+                fillDemoAccount(username, password) {
+                    this.form.username = username;
+                    this.form.password = password;
+                    this.hasError = false;
+                    this.message = '';
+                },
+                
+                checkUrlParams() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const registered = urlParams.get('registered');
+                    
+                    if (registered === 'true') {
+                        this.message = '注册成功！请使用您的账户登录';
+                        this.messageType = 'success';
+                    }
+                }
+            },
+            
+            mounted() {
+                this.checkUrlParams();
+                
+                // 检查是否在开发环境
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    this.showDemoAccounts = false; // 可以根据需要开启
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+download:
+  download_dir: /mnt/data/Downloads # 相对当前系统，qBittorrent的下载目录
+  qbittorrent_password: # qBittorrent 账号
+  qbittorrent_port: 8080 # qBittorrent 端口
+  qbittorrent_url: # qBittorrent 密码
+  qbittorrent_username: # qBittorrent账号
+general:
+  address: 0.0.0.0 # 监听地址
+  http_proxy: http://127.0.0.1:20172 # HTTP代理
+  listen: 8001 # 监听端口
+  secret_key: your_secret_key # 随便生成的密钥，用于JWT
+  system_lang: cn
+hardlink:
+  enable: true
+  output_base: /mnt/data/Video # 硬链接的输出目录，相对当前系统，例如《刀剑神域》第一季会按照 /mnt/data/Video/刀剑神域/Season 1/刀剑神域 S01E01.mkv 的路径创建硬链接
+llm: # 各种地方都会用到，包括1.自动判断文件是否需要创建硬链接 2.自动清洗标题，以从TMDB获取信息 3.提取分集信息
+  enable: true
+  name: deepseek-r1:14b
+  token: sk-wiaswuzupycjioktzqdgmniptfrcnancwkrzfwzzxviqjwan
+  url: http://127.0.0.1:11434/v1/chat/completions
+notifications: # TODO还没写好，这里随便写啥都一样
+  - enable: false
+    type: telegram
+    token: 1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZ
+    chat_id: -123456789
+  - enable: false
+    type: email
+    smtp_server: smtp.example.com
+    smtp_port: 587
+    smtp_username:
+    smtp_password:
+    smtp_from:
+    smtp_to:
+tmdb_api: # TMDB API配置，去TMDB搞一个就行
+  api_key: your_tmdb_api_key
+  enabled: true
