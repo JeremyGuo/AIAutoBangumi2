@@ -89,7 +89,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     获取当前用户，使用JWT令牌验证用户身份
     """
     token = get_token_from_request(request)
-    logging.info(f"获取当前用户: {token}")
+    # logging.info(f"获取当前用户: {token}")
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

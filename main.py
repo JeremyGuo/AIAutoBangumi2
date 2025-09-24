@@ -17,6 +17,8 @@ from api.cache import router as cache_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from utils.dht import dht_service
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -28,6 +30,9 @@ async def lifespan(app: FastAPI):
     # 启动定时任务调度器
     from core.scheduler import scheduler
     await scheduler.start()
+
+    # 启动DHT服务
+    dht_service.start()
     
     yield
     
@@ -35,6 +40,9 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutting down...")
     # 停止定时任务调度器
     await scheduler.stop()
+
+    # 停止DHT服务
+    dht_service.stop()
 
 # Create FastAPI app
 app = FastAPI(

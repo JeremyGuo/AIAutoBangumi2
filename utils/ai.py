@@ -96,47 +96,29 @@ async def get_cleaned_title(title: str) -> str:
     """
     try:
         # 步骤1: 使用 DuckDuckGo 搜索相关动漫信息
-        search_results = await search_anime_info(title, max_results=3)
+        # search_results = await search_anime_info(title, max_results=3)
         
-        if not search_results:
+        # if not search_results:
             # 如果搜索失败，至少尝试基本清理
-            return await basic_title_cleanup(title)
+            # return await basic_title_cleanup(title)
         
         # 步骤2: 构建给AI的提示信息
-        search_context = "\n\n".join(search_results)
+        # search_context = "\n\n".join(search_results)
         
         messages = [
             {
-                "role": "system",
-                "content": "你是一个专业的动漫标题清理助手。你的任务是从带有发布组织、网站标识等冗余信息的标题中提取出干净的动漫名称。"
-            },
-            {
                 "role": "user",
-                "content": f"""请根据以下搜索结果和原始标题，提取出干净的动漫名称。
-
-原始标题: {title}
-
-相关搜索结果:
-{search_context}
-
-请注意:
-1. 去除发布组织名称（如 Mikan Project、Nyaa、ANi等）
-2. 去除网站标识和符号（如 [ ]、- 等包围的组织名）
-3. 去除画质标识（如 1080p、720p、HEVC等）
-4. 去除语言标识（如 简体中文、繁体中文等）
-5. 保留动漫的正确中文或日文名称
-6. 如果有季度信息（如第二季、S2等），请去除
-
-只返回清理后的动漫名称，不要包含任何解释。"""
+                "content": f"""从下面的标题中，清洗掉除了标题之外的所有内容，只保留一种语言，不要保留季度等信息，只要标题。将返回的内容写入<title></title>中：{title}"""
             }
         ]
         
         # 步骤3: 调用AI获取清洗结果
         result = await call_llm_api(messages)
-        cleaned_title = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL)
+        # cleaned_title = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL)
+        cleaned_title = re.search(r'<title>(.*?)</title>', result, re.DOTALL)
 
         if cleaned_title:
-            return cleaned_title.strip()
+            return cleaned_title.group(1).strip()
         else:
             # AI调用失败时的备用方案
             return (await basic_title_cleanup(title)).strip()

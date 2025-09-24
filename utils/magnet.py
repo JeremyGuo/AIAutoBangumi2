@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional
 from urllib.parse import urlencode, quote
 import logging
 from core.config import CONFIG
+from utils.dht import dht_service
 
 logger = logging.getLogger(__name__)
 
@@ -549,10 +550,6 @@ async def extract_title_from_torrent(url: str) -> Optional[str]:
 async def download_torrent_file_magnet(url: str) -> Optional[bytes]:
     """
     从磁力链接获取种子数据
-    支持多种方式：
-    1. 通过 itorrents.org 服务
-    2. 通过其他公共种子转换服务
-    3. 本地BitTorrent客户端（如果可用）
     
     Args:
         url: 磁力链接
@@ -577,27 +574,10 @@ async def download_torrent_file_magnet(url: str) -> Optional[bytes]:
     
     logger.info(f"Attempting to download torrent from magnet: {info_hash}")
     
-    # 3. 尝试多种方式获取种子数据
-    torrent_data = None
-    
-    # 方式1: 通过 itorrents.org
-    torrent_data = await _download_from_itorrents(info_hash)
+    # 3. 尝试通过DHT服务获取种子数据
+    torrent_data = await dht_service.get_torrent_file(url)
     if torrent_data:
-        logger.info(f"Successfully downloaded torrent from itorrents.org: {info_hash}")
-        _save_to_cache(url, torrent_data)
-        return torrent_data
-    
-    # 方式2: 通过其他公共服务
-    torrent_data = await _download_from_other_services(info_hash)
-    if torrent_data:
-        logger.info(f"Successfully downloaded torrent from alternative service: {info_hash}")
-        _save_to_cache(url, torrent_data)
-        return torrent_data
-    
-    # 方式3: 通过本地BitTorrent客户端（如果可用）
-    torrent_data = await _download_from_local_client(url, info_hash)
-    if torrent_data:
-        logger.info(f"Successfully downloaded torrent from local client: {info_hash}")
+        logger.info(f"Successfully downloaded torrent from DHT: {info_hash}")
         _save_to_cache(url, torrent_data)
         return torrent_data
     
@@ -616,6 +596,7 @@ async def _download_from_itorrents(info_hash: str) -> Optional[bytes]:
             proxy = None
             if hasattr(CONFIG.general, 'http_proxy') and CONFIG.general.http_proxy:
                 proxy = CONFIG.general.http_proxy
+            logger.info(f"Downloading from itorrents.org: {torrent_url} via proxy: {proxy}")
             
             # 设置请求头，模拟浏览器
             headers = {
