@@ -12,6 +12,12 @@ from api.source import router as source_router
 from api.torrent import router as torrent_router
 from api.user import router as user_router
 from api.cache import router as cache_router
+from api.statistics import router as statistics_router
+from api.tags import router as tags_router
+from api.batch import router as batch_router
+from api.backup import router as backup_router
+from api.search import router as search_router
+from api.notifications import router as notifications_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,17 +53,40 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="AIAutoBangumi2",
-    description="AI Auto Bangumi Management System",
+    description="AI Auto Bangumi Management System - 智能动漫自动下载与管理系统",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
 )
 
+# Add middleware
+from core.middleware import (
+    RequestLoggingMiddleware,
+    ErrorHandlingMiddleware,
+    SecurityHeadersMiddleware,
+    RateLimitMiddleware
+)
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ErrorHandlingMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
+# Rate limiting: 100 requests per minute per IP (can be adjusted)
+app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
+
 # Include API routers
-app.include_router(auth_router, prefix="/api/auth")
-app.include_router(source_router, prefix="/api/source")
-app.include_router(torrent_router, prefix="/api/torrent")
-app.include_router(user_router, prefix="/api/user")
-app.include_router(cache_router, prefix="/api/cache")
+app.include_router(auth_router, prefix="/api/auth", tags=["认证"])
+app.include_router(source_router, prefix="/api/source", tags=["源管理"])
+app.include_router(torrent_router, prefix="/api/torrent", tags=["种子管理"])
+app.include_router(user_router, prefix="/api/user", tags=["用户管理"])
+app.include_router(cache_router, prefix="/api/cache", tags=["缓存管理"])
+app.include_router(statistics_router, prefix="/api/statistics", tags=["统计分析"])
+app.include_router(tags_router, prefix="/api/tags", tags=["标签管理"])
+app.include_router(batch_router, prefix="/api/batch", tags=["批量操作"])
+app.include_router(backup_router, prefix="/api/backup", tags=["备份导出"])
+app.include_router(search_router, prefix="/api/search", tags=["搜索过滤"])
+app.include_router(notifications_router, prefix="/api/notifications", tags=["通知服务"])
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -74,6 +103,15 @@ jinja_env = Environment(
     comment_end_string='#}'
 )
 templates = Jinja2Templates(env=jinja_env)
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点"""
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "service": "AIAutoBangumi2"
+    }
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):

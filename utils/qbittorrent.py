@@ -158,3 +158,78 @@ class QBittorrentClient:
         except Exception as e:
             logger.error(f"Error extracting hash from magnet: {e}")
             return None
+    
+    def pause_torrent(self, torrent_hash: str) -> bool:
+        """暂停种子下载"""
+        self._ensure_connected()
+        assert self.client is not None
+        
+        try:
+            self.client.torrents_pause(torrent_hashes=torrent_hash)
+            logger.info(f"Successfully paused torrent: {torrent_hash}")
+            return True
+        except Exception as e:
+            logger.error(f"Error pausing torrent {torrent_hash}: {e}")
+            return False
+    
+    def resume_torrent(self, torrent_hash: str) -> bool:
+        """恢复种子下载"""
+        self._ensure_connected()
+        assert self.client is not None
+        
+        try:
+            self.client.torrents_resume(torrent_hashes=torrent_hash)
+            logger.info(f"Successfully resumed torrent: {torrent_hash}")
+            return True
+        except Exception as e:
+            logger.error(f"Error resuming torrent {torrent_hash}: {e}")
+            return False
+    
+    def delete_torrent(self, torrent_hash: str, delete_files: bool = False) -> bool:
+        """删除种子"""
+        self._ensure_connected()
+        assert self.client is not None
+        
+        try:
+            self.client.torrents_delete(
+                delete_files=delete_files,
+                torrent_hashes=torrent_hash
+            )
+            logger.info(f"Successfully deleted torrent: {torrent_hash} (delete_files={delete_files})")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting torrent {torrent_hash}: {e}")
+            return False
+    
+    def recheck_torrent(self, torrent_hash: str) -> bool:
+        """重新检查种子文件"""
+        self._ensure_connected()
+        assert self.client is not None
+        
+        try:
+            self.client.torrents_recheck(torrent_hashes=torrent_hash)
+            logger.info(f"Successfully rechecked torrent: {torrent_hash}")
+            return True
+        except Exception as e:
+            logger.error(f"Error rechecking torrent {torrent_hash}: {e}")
+            return False
+    
+    def set_torrent_speed_limit(self, torrent_hash: str, download_limit: int, upload_limit: int) -> bool:
+        """设置种子速度限制（单位：bytes/s）"""
+        self._ensure_connected()
+        assert self.client is not None
+        
+        try:
+            self.client.torrents_set_download_limit(
+                limit=download_limit,
+                torrent_hashes=torrent_hash
+            )
+            self.client.torrents_set_upload_limit(
+                limit=upload_limit,
+                torrent_hashes=torrent_hash
+            )
+            logger.info(f"Successfully set speed limit for torrent: {torrent_hash}")
+            return True
+        except Exception as e:
+            logger.error(f"Error setting speed limit for torrent {torrent_hash}: {e}")
+            return False
