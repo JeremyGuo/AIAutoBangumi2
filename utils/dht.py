@@ -3,17 +3,29 @@ import logging
 import threading
 import time
 
-import libtorrent as lt
-
 logger = logging.getLogger(__name__)
+
+# Try to import libtorrent, but make it optional
+try:
+    import libtorrent as lt
+    LIBTORRENT_AVAILABLE = True
+except ImportError:
+    logger.warning("libtorrent not available, DHT service will be disabled")
+    LIBTORRENT_AVAILABLE = False
+    lt = None
 
 
 class DHTService:
     def __init__(self):
         self.session = None
         self.thread = None
+        self.available = LIBTORRENT_AVAILABLE
 
     def start(self):
+        if not self.available:
+            logger.info("DHT service not available (libtorrent not installed)")
+            return
+        
         if self.session:
             return
 
@@ -40,6 +52,10 @@ class DHTService:
             logger.info("DHT service stopped")
 
     async def get_torrent_file(self, magnet_link: str) -> bytes | None:
+        if not self.available:
+            logger.warning("DHT service not available, cannot get torrent file")
+            return None
+        
         if not self.session:
             raise RuntimeError("DHT service not started")
 
