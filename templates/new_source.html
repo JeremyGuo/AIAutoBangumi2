@@ -455,7 +455,7 @@
                                         @click="selectTMDBResult(result)"
                                         :class="['tmdb-item', { selected: selectedTMDB && selectedTMDB.id === result.id }]"
                                     >
-                                        <div class="tmdb-title">{{ result.title }}</div>
+                                        <div class="tmdb-title">{{ result.display_title || result.title }}</div>
                                         <div v-if="result.overview" class="tmdb-overview">{{ result.overview.substring(0, 150) }}...</div>
                                         <div class="tmdb-meta">
                                             ID: {{ result.id }} | 
@@ -741,7 +741,7 @@
                 
                 selectTMDBResult(result) {
                     this.selectedTMDB = result;
-                    this.sourceForm.title = result.title;
+                    this.sourceForm.title = result.display_title || result.title;
                     this.sourceForm.media_type = result.type;
                     // 如果是TV剧，获取详细信息
                     if (result.type === 'tv') {

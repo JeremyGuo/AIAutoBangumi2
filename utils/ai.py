@@ -56,10 +56,12 @@ async def get_cleaned_title(title: str) -> str:
         清洗后的干净标题
     """
     try:
+        system_lang = (getattr(CONFIG.general, "system_lang", "") or "").lower()
+        lang_hint = "中文" if system_lang.startswith("cn") or system_lang.startswith("zh") else "英文"
         messages = [
             {
                 "role": "user",
-                "content": f"""从下面的标题中，清洗掉除了标题之外的所有内容，只保留一种语言，不要保留季度等信息，只要标题。将返回的内容写入<title></title>中：{title}"""
+                "content": f"""从下面的标题中，清洗掉除了标题之外的所有内容，只保留一种语言，不要保留季度等信息，只要标题。优先保留{lang_hint}标题。将返回的内容写入<title></title>中：{title}"""
             }
         ]
         

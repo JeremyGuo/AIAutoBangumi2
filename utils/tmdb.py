@@ -8,6 +8,19 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+def _language_from_system(system_lang: str) -> str:
+    system_lang = system_lang.lower()
+    if system_lang.startswith("cn") or system_lang.startswith("zh"):
+        return "zh-CN"
+    if system_lang.startswith("ja") or system_lang.startswith("jp"):
+        return "ja-JP"
+    if system_lang.startswith("en"):
+        return "en-US"
+    return "en-US"
+
+def _extract_display_title(item: Dict) -> str:
+    return item.get('title') or item.get('name') or ""
+
 async def search_tmdb(title: str, raise_on_error: bool = False) -> List[Dict]:
     """
     使用TMDB API搜索影视作品
@@ -53,23 +66,45 @@ async def search_tmdb(title: str, raise_on_error: bool = False) -> List[Dict]:
                         raise RuntimeError(message)
                     return []
 
-        languages = ["zh-CN", "en-US", None]
-        merged: dict[tuple[str, str], Dict] = {}
+        system_lang = (getattr(config.general, "system_lang", "") or "")
+        preferred_lang = _language_from_system(system_lang)
+        languages = [preferred_lang, "en-US", None]
+        by_lang: dict[str | None, dict[tuple[str, str], Dict]] = {}
         for lang in languages:
             results = await fetch_results(lang)
             if not results:
                 continue
+            lang_map: dict[tuple[str, str], Dict] = {}
             for item in results:
-                media_type = item.get('media_type') or item.get('media_type', 'tv')
+                media_type = item.get('media_type') or "tv"
                 key = (str(item.get('id')), str(media_type))
+                lang_map[key] = item
+            by_lang[lang] = lang_map
+
+        merged: dict[tuple[str, str], Dict] = {}
+        for lang_map in by_lang.values():
+            for key, item in lang_map.items():
                 merged[key] = item
 
         processed_results = []
-        for item in merged.values():
+        for key, item in merged.items():
+            display_title = ""
+            for lang in languages:
+                lang_map = by_lang.get(lang)
+                if not lang_map:
+                    continue
+                candidate = lang_map.get(key)
+                if candidate:
+                    display_title = _extract_display_title(candidate)
+                    if display_title:
+                        break
+            if not display_title:
+                display_title = _extract_display_title(item)
             processed_item = {
                 'id': str(item.get('id')),
                 'title': item.get('title') or item.get('name'),
                 'original_title': item.get('original_title') or item.get('original_name'),
+                'display_title': display_title,
                 'type': 'movie' if item.get('media_type') == 'movie' else 'tv',
                 'overview': item.get('overview'),
                 'first_air_date': item.get('first_air_date'),
@@ -119,9 +154,9 @@ async def get_tmdb_tv_details(tv_id: int, raise_on_error: bool = False) -> Optio
             'accept': 'application/json'
         }
         
-        # 查询参数
+        system_lang = (getattr(config.general, "system_lang", "") or "")
         params = {
-            'language': 'zh-CN',  # 中文结果
+            'language': _language_from_system(system_lang),
         }
         
         # 设置代理
