@@ -1,13 +1,12 @@
 import aiohttp
 import hashlib
 import bencodepy
-import base64
 import os
 import tempfile
 import time
 import asyncio
 from typing import List, Dict, Any, Optional
-from urllib.parse import urlencode, quote
+from urllib.parse import quote
 import logging
 from core.config import CONFIG
 from utils.dht import dht_service
@@ -518,7 +517,7 @@ def extract_title_from_rss_item(item: Dict[str, Any]) -> Optional[str]:
         logger.error(f"Error extracting title from RSS item: {e}")
         return None
 
-async def extract_title_from_torrent(url: str) -> Optional[str]:
+async def extract_title_from_torrent(url: str, raise_on_error: bool = False) -> Optional[str]:
     """
     从种子文件或磁力链接中提取标题
     """
@@ -529,22 +528,31 @@ async def extract_title_from_torrent(url: str) -> Optional[str]:
         else:
             # 从种子文件提取标题
             torrent_data = await download_torrent_file(url)
-        if torrent_data:
-            try:
-                import bencodepy
-                torrent_dict = bencodepy.decode(torrent_data)  # type: ignore
-                info_dict = torrent_dict[b'info']  # type: ignore
-                
-                if b'name' in info_dict:
-                    name = info_dict[b'name'].decode('utf-8', errors='ignore')  # type: ignore
-                    return name.strip()
-            except Exception as e:
-                logger.error(f"Error parsing torrent file for title: {e}")
-        
+        if not torrent_data:
+            if raise_on_error:
+                raise RuntimeError("无法获取种子元数据，可能是DHT未启动或网络不可达")
+            return None
+
+        try:
+            torrent_dict = bencodepy.decode(torrent_data)  # type: ignore
+            info_dict = torrent_dict[b'info']  # type: ignore
+
+            if b'name' in info_dict:
+                name = info_dict[b'name'].decode('utf-8', errors='ignore')  # type: ignore
+                return name.strip()
+        except Exception as e:
+            logger.error(f"Error parsing torrent file for title: {e}")
+            if raise_on_error:
+                raise RuntimeError(f"解析种子文件失败: {e}")
+
+        if raise_on_error:
+            raise RuntimeError("种子元数据缺少标题字段")
         return None
         
     except Exception as e:
         logger.error(f"Error extracting title from torrent: {e}")
+        if raise_on_error:
+            raise RuntimeError(f"无法提取种子标题: {e}")
         return None
 
 async def download_torrent_file_magnet(url: str) -> Optional[bytes]:

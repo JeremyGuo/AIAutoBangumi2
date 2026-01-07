@@ -1,6 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-from typing import Dict, Any
 
 from models.models import User
 from core.user import get_current_admin_user

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.user import get_current_user, get_user_count
 from models.session import get_db
@@ -8,7 +8,6 @@ router = APIRouter()
 
 @router.get("/me")
 async def get_current_user_info(
-    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

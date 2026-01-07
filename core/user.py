@@ -1,15 +1,14 @@
 from datetime import datetime, timedelta
-from typing import Optional, Union, Any, Dict
+from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from core.config import CONFIG
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.session import get_db
 from models.models import User
 from schemas.user import UserCreate
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, Request
 import logging
 
 # 配置密码上下文
@@ -18,9 +17,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # 配置 JWT
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
-
-# 配置 OAuth2
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
@@ -31,8 +27,6 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 from pydantic import BaseModel
-from typing import Optional, Union
-from datetime import datetime
 
 class TokenPayload(BaseModel):
     """用于解析JWT令牌的payload数据"""

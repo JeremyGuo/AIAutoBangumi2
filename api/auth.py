@@ -1,7 +1,4 @@
-from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
-from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, status, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.user import authenticate_user, create_access_token, get_user_count, get_user_by_username, create_user
@@ -9,19 +6,17 @@ from models.session import get_db
 import logging
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 logger = logging.getLogger("api.auth")
 
 # 登录表单处理（网页表单提交）
 @router.post("/login", response_class=HTMLResponse)
 async def login_form(
-    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
     """处理登录表单"""
-    logging.info(f"用户尝试登录: {username} {password}")
+    logger.info("Login attempt for user: %s", username)
     user = await authenticate_user(db, username, password)
     if not user:
         return JSONResponse(
@@ -47,7 +42,6 @@ from schemas.user import UserCreate
 # 注册表单处理
 @router.post("/register", response_class=HTMLResponse)
 async def register_form(
-    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
@@ -80,7 +74,7 @@ async def register_form(
         )
         
     except Exception as e:
-        logger.error(f"注册失败: {str(e)}")
+        logger.error("注册失败: %s", str(e))
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "注册失败，请稍后再试"}

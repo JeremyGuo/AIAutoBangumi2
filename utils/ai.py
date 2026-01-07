@@ -1,48 +1,9 @@
-import asyncio
 import aiohttp
 import json
 import re
-from typing import Tuple, List, Dict, Any
-from ddgs import DDGS
+from typing import Tuple, List, Dict
 from core.config import CONFIG
 import logging
-
-async def search_anime_info(query: str, max_results: int = 5) -> List[str]:
-    """
-    使用 DuckDuckGo 搜索动漫相关信息
-    
-    Args:
-        query: 搜索查询关键词
-        max_results: 最大返回结果数量
-    
-    Returns:
-        搜索结果列表，每个元素包含标题和摘要
-    """
-    try:
-        search_query = f"{query} 动漫 anime"
-        
-        # 使用同步版本的DDGS在asyncio中运行
-        def sync_search():
-            results = []
-            try:
-                ddgs = DDGS()
-                search_results = ddgs.text(search_query, max_results=max_results)
-                for result in search_results:
-                    # 格式化搜索结果
-                    formatted_result = f"标题: {result.get('title', '')}\n内容: {result.get('body', '')}"
-                    results.append(formatted_result)
-            except Exception as e:
-                print(f"同步搜索内部错误: {e}")
-            return results
-        
-        # 在线程池中运行同步搜索
-        loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, sync_search)
-        return results
-        
-    except Exception as e:
-        print(f"搜索失败: {e}")
-        return []
 
 
 async def call_llm_api(messages: List[Dict[str, str]]) -> str:
@@ -95,16 +56,6 @@ async def get_cleaned_title(title: str) -> str:
         清洗后的干净标题
     """
     try:
-        # 步骤1: 使用 DuckDuckGo 搜索相关动漫信息
-        # search_results = await search_anime_info(title, max_results=3)
-        
-        # if not search_results:
-            # 如果搜索失败，至少尝试基本清理
-            # return await basic_title_cleanup(title)
-        
-        # 步骤2: 构建给AI的提示信息
-        # search_context = "\n\n".join(search_results)
-        
         messages = [
             {
                 "role": "user",

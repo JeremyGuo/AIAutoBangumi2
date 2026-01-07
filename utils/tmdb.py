@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-async def search_tmdb(title: str) -> List[Dict]:
+async def search_tmdb(title: str, raise_on_error: bool = False) -> List[Dict]:
     """
     使用TMDB API搜索影视作品
     """
@@ -16,7 +16,10 @@ async def search_tmdb(title: str) -> List[Dict]:
         config = load_config()
         
         if not config.tmdb_api.enabled or not config.tmdb_api.api_key:
-            logger.warning("TMDB API未启用或API Key未配置")
+            message = "TMDB未启用或API Key未配置"
+            logger.warning(message)
+            if raise_on_error:
+                raise RuntimeError(message)
             return []
         
         # TMDB API搜索端点
@@ -73,17 +76,26 @@ async def search_tmdb(title: str) -> List[Dict]:
                     logger.info(f"TMDB搜索 '{title}' 返回 {len(processed_results)} 个结果")
                     return processed_results
                 else:
-                    logger.error(f"TMDB API请求失败: {response.status}")
+                    message = f"TMDB请求失败: HTTP {response.status}"
+                    logger.error(message)
+                    if raise_on_error:
+                        raise RuntimeError(message)
                     return []
                     
     except asyncio.TimeoutError:
-        logger.error("TMDB API请求超时")
+        message = "TMDB请求超时"
+        logger.error(message)
+        if raise_on_error:
+            raise RuntimeError(message)
         return []
     except Exception as e:
-        logger.error(f"TMDB API请求发生错误: {e}")
+        message = f"TMDB请求发生错误: {e}"
+        logger.error(message)
+        if raise_on_error:
+            raise RuntimeError(message)
         return []
 
-async def get_tmdb_tv_details(tv_id: int) -> Optional[Dict]:
+async def get_tmdb_tv_details(tv_id: int, raise_on_error: bool = False) -> Optional[Dict]:
     """
     获取TMDB TV剧的详细信息，包括季度和剧集信息
     """
@@ -91,7 +103,10 @@ async def get_tmdb_tv_details(tv_id: int) -> Optional[Dict]:
         config = load_config()
         
         if not config.tmdb_api.enabled or not config.tmdb_api.api_key:
-            logger.warning("TMDB API未启用或API Key未配置")
+            message = "TMDB未启用或API Key未配置"
+            logger.warning(message)
+            if raise_on_error:
+                raise RuntimeError(message)
             return None
         
         # TMDB API TV详情端点
@@ -150,14 +165,23 @@ async def get_tmdb_tv_details(tv_id: int) -> Optional[Dict]:
                         'status': data.get('status')
                     }
                 else:
-                    logger.error(f"TMDB TV详情API请求失败: {response.status}")
+                    message = f"TMDB详情请求失败: HTTP {response.status}"
+                    logger.error(message)
+                    if raise_on_error:
+                        raise RuntimeError(message)
                     return None
                     
     except asyncio.TimeoutError:
-        logger.error("TMDB TV详情API请求超时")
+        message = "TMDB详情请求超时"
+        logger.error(message)
+        if raise_on_error:
+            raise RuntimeError(message)
         return None
     except Exception as e:
-        logger.error(f"TMDB TV详情API请求发生错误: {e}")
+        message = f"TMDB详情请求发生错误: {e}"
+        logger.error(message)
+        if raise_on_error:
+            raise RuntimeError(message)
         return None
 
 async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
@@ -169,13 +193,12 @@ async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
         return AnalyzeSourceResponse(error="URL或类型不能为空")
 
     cleaned_title = None
+    warning = None
     
     try:
         if source_type == "rss":
             # 获取RSS数据和标题
-            rss_data = await get_rss_data(url)
-            if rss_data is None:
-                return AnalyzeSourceResponse(error="无法获取RSS数据，请检查URL是否正确")
+            rss_data = await get_rss_data(url, raise_on_error=True)
             dirty_title = await get_rss_title(url, rss_data)
             if not dirty_title:
                 return AnalyzeSourceResponse(error="无法从RSS源获取标题")
@@ -188,9 +211,7 @@ async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
             # 对于磁力链接，可以尝试从链接中提取标题
             # 这里可以添加磁力链接标题提取逻辑
             from utils.magnet import extract_title_from_torrent
-            dirty_title = await extract_title_from_torrent(url)
-            if not dirty_title:
-                return AnalyzeSourceResponse(error="无法从磁力链接提取标题")
+            dirty_title = await extract_title_from_torrent(url, raise_on_error=True)
             from utils.ai import get_cleaned_title
             cleaned_title = await get_cleaned_title(dirty_title)
             if not cleaned_title:
@@ -201,13 +222,17 @@ async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
         # 用Cleaned标题查询TMDB
         tmdb_results = []
         if cleaned_title:
-            tmdb_results = await search_tmdb(cleaned_title)
+            try:
+                tmdb_results = await search_tmdb(cleaned_title, raise_on_error=True)
+            except RuntimeError as e:
+                warning = str(e)
         
         return AnalyzeSourceResponse(
             title=cleaned_title,
-            tmdb_results=tmdb_results
+            tmdb_results=tmdb_results,
+            warning=warning
         )
         
     except Exception as e:
         logger.error(f"分析源时发生错误: {e}")
-        return AnalyzeSourceResponse(error=f"分析源时发生错误: {str(e)}")
+        raise RuntimeError(f"分析源时发生错误: {str(e)}")

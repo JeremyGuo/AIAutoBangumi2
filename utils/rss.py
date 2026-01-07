@@ -2,13 +2,12 @@ import aiohttp
 import xml.etree.ElementTree as ET
 from typing import Optional, Dict, Any, List
 import logging
-from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from core.config import CONFIG
 
 logger = logging.getLogger(__name__)
 
-async def get_rss_data(url: str) -> Optional[Dict[str, Any]]:
+async def get_rss_data(url: str, raise_on_error: bool = False) -> Optional[Dict[str, Any]]:
     """
     获取RSS源数据
     """
@@ -24,7 +23,10 @@ async def get_rss_data(url: str) -> Optional[Dict[str, Any]]:
                     proxy=CONFIG.general.http_proxy
                 ) as response:
                     if response.status != 200:
-                        logger.error(f"Failed to fetch RSS data from {url}, status: {response.status}")
+                        error_msg = f"获取RSS失败: HTTP {response.status}"
+                        logger.error(error_msg)
+                        if raise_on_error:
+                            raise RuntimeError(error_msg)
                         return None
                     
                     content = await response.text()
@@ -34,7 +36,10 @@ async def get_rss_data(url: str) -> Optional[Dict[str, Any]]:
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
                     if response.status != 200:
-                        logger.error(f"Failed to fetch RSS data from {url}, status: {response.status}")
+                        error_msg = f"获取RSS失败: HTTP {response.status}"
+                        logger.error(error_msg)
+                        if raise_on_error:
+                            raise RuntimeError(error_msg)
                         return None
                     
                     content = await response.text()
@@ -45,12 +50,18 @@ async def get_rss_data(url: str) -> Optional[Dict[str, Any]]:
                     root = ET.fromstring(content)
                     return _parse_rss_xml(root)
                 except ET.ParseError as e:
-                    logger.error(f"Failed to parse RSS XML from {url}: {e}")
+                    error_msg = f"RSS解析失败: {e}"
+                    logger.error(error_msg)
+                    if raise_on_error:
+                        raise RuntimeError(error_msg)
                     return None
             else:
                 return None
     except Exception as e:
-        logger.error(f"Error fetching RSS data from {url}: {e}")
+        error_msg = f"获取RSS异常: {e}"
+        logger.error(error_msg)
+        if raise_on_error:
+            raise RuntimeError(error_msg)
         return None
 
 def _parse_rss_xml(root: ET.Element) -> Dict[str, Any]:

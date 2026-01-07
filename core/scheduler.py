@@ -5,10 +5,9 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
-from models.session import AsyncSessionLocal, AsyncSession
+from models.session import AsyncSessionLocal
 from models.models import Source, Torrent, File
 from utils.rss import get_rss_data
 from utils.qbittorrent import QBittorrentClient
@@ -491,6 +490,14 @@ class AutoBangumiScheduler:
             str: 创建的硬链接路径或错误信息
         """
         try:
+            # Ensure title cannot escape output_base in strict mode
+            title = source.title or ""
+            if os.path.isabs(title) or ".." in os.path.normpath(title).split(os.sep):
+                error_msg = f"非法标题路径: {title}"
+                file_record.hardlink_status = "failed"
+                file_record.hardlink_error = error_msg
+                return error_msg
+
             # 检查是否开启硬链接
             if not CONFIG.hardlink.enable:
                 error_msg = "未开启硬链接功能"
@@ -523,6 +530,14 @@ class AutoBangumiScheduler:
             dest_path = await self._build_hardlink_path(source, file_record, file_ext)
             if not dest_path:
                 error_msg = "无法构建硬链接目标路径"
+                file_record.hardlink_status = "failed"
+                file_record.hardlink_error = error_msg
+                return error_msg
+
+            output_base = os.path.abspath(CONFIG.hardlink.output_base)
+            dest_abs = os.path.abspath(dest_path)
+            if os.path.commonpath([output_base, dest_abs]) != output_base:
+                error_msg = f"硬链接路径越界: {dest_path}"
                 file_record.hardlink_status = "failed"
                 file_record.hardlink_error = error_msg
                 return error_msg

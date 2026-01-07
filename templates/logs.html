@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日志 - AIAutoBangumi2</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .nav a:hover {
+            background-color: rgba(255,255,255,0.2);
+        }
+
+        .main {
+            padding: 30px 0;
+        }
+
+        .toolbar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .input {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+
+        .log-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .log-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .log-meta {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .log-table th,
+        .log-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #edf2f7;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        .log-table th {
+            background: #f7fafc;
+            color: #4a5568;
+            font-weight: 600;
+        }
+
+        .level {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .level-INFO {
+            background: #e6fffa;
+            color: #2c7a7b;
+        }
+
+        .level-WARNING {
+            background: #fef5e7;
+            color: #dd6b20;
+        }
+
+        .level-ERROR,
+        .level-CRITICAL {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .level-DEBUG {
+            background: #edf2f7;
+            color: #4a5568;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .loading,
+        .error,
+        .empty {
+            padding: 20px;
+            text-align: center;
+            color: #718096;
+        }
+
+        .error {
+            color: #c53030;
+            background: #fed7d7;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .pager {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-top: 1px solid #edf2f7;
+            background: #f7fafc;
+        }
+
+        .pager-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .toolbar {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">AIAutoBangumi2</div>
+                    <nav class="nav">
+                        <a href="/">首页</a>
+                        <a href="/new_source.html">添加源</a>
+                        <a href="/logs.html">日志</a>
+                        <span v-if="user">{{ user.username }}</span>
+                        <a href="/api/auth/logout" v-if="user">登出</a>
+                        <a href="/login.html" v-if="!user">登录</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="container">
+                <div v-if="!authChecked" class="loading">正在验证用户身份...</div>
+
+                <template v-else-if="user">
+                    <div v-if="!user.is_admin" class="error">
+                        需要管理员权限才能查看日志。
+                    </div>
+
+                    <template v-else>
+                        <div class="toolbar">
+                            <input class="input" v-model="filters.keyword" placeholder="关键词筛选（支持任意文本）">
+                            <select class="input" v-model="filters.level">
+                                <option value="">全部等级</option>
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                            <input class="input" v-model="filters.logger" placeholder="Logger 名称">
+                            <select class="input" v-model.number="filters.limit">
+                                <option :value="100">每页 100</option>
+                                <option :value="200">每页 200</option>
+                                <option :value="500">每页 500</option>
+                                <option :value="1000">每页 1000</option>
+                            </select>
+                            <button class="btn btn-primary" @click="loadLogs">刷新</button>
+                        </div>
+
+                        <div v-if="error" class="error">{{ error }}</div>
+
+                        <div class="log-card">
+                            <div class="log-header">
+                                <div class="log-title">最近日志</div>
+                                <div class="log-meta">{{ metaText }}</div>
+                            </div>
+
+                            <div v-if="loading" class="loading">加载中...</div>
+                            <div v-else-if="logs.length === 0" class="empty">暂无日志</div>
+                            <table v-else class="log-table">
+                                <thead>
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>等级</th>
+                                        <th>模块</th>
+                                        <th>内容</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(log, index) in logs" :key="index">
+                                        <td class="mono">{{ log.timestamp || '-' }}</td>
+                                        <td>
+                                            <span class="level" :class="'level-' + (log.level || 'INFO')">{{ log.level || '-' }}</span>
+                                        </td>
+                                        <td class="mono">{{ log.logger || '-' }}</td>
+                                        <td class="mono">{{ log.message || log.raw }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="pager">
+                                <div class="log-meta">第 {{ page }} 页</div>
+                                <div class="pager-actions">
+                                    <button class="btn btn-secondary" :disabled="page === 1 || loading" @click="prevPage">
+                                        上一页
+                                    </button>
+                                    <button class="btn btn-primary" :disabled="!hasMore || loading" @click="nextPage">
+                                        下一页
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </template>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    logs: [],
+                    loading: false,
+                    error: null,
+                    user: null,
+                    authChecked: false,
+                    logFile: null,
+                    filters: {
+                        keyword: '',
+                        level: '',
+                        logger: '',
+                        limit: 200
+                    },
+                    page: 1,
+                    hasMore: false
+                }
+            },
+
+            computed: {
+                metaText() {
+                    if (!this.logFile) {
+                        return '日志文件未就绪';
+                    }
+                    return `来源: ${this.logFile} | 共 ${this.logs.length} 条`;
+                }
+            },
+
+            methods: {
+                async checkAuth() {
+                    try {
+                        const response = await axios.get('/api/user/me');
+                        this.user = response.data;
+                        this.authChecked = true;
+                        return true;
+                    } catch (error) {
+                        if (error.response?.status === 401) {
+                            window.location.href = '/login.html';
+                            return false;
+                        }
+                        this.authChecked = true;
+                        return false;
+                    }
+                },
+
+                async loadLogs() {
+                    this.loading = true;
+                    this.error = null;
+                    try {
+                        const response = await axios.get('/api/logs/recent', {
+                            params: {
+                                page: this.page,
+                                page_size: this.filters.limit,
+                                level: this.filters.level || undefined,
+                                keyword: this.filters.keyword || undefined,
+                                logger: this.filters.logger || undefined
+                            }
+                        });
+                        if (response.data.status !== 'success') {
+                            this.error = response.data.message || '获取日志失败';
+                            this.logs = [];
+                            return;
+                        }
+                        this.logs = response.data.items || [];
+                        this.logFile = response.data.log_file || null;
+                        this.hasMore = response.data.has_more || false;
+                    } catch (error) {
+                        this.error = error.response?.data?.detail || error.response?.data?.message || '获取日志失败';
+                        this.logs = [];
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                prevPage() {
+                    if (this.page > 1) {
+                        this.page -= 1;
+                        this.loadLogs();
+                    }
+                },
+
+                nextPage() {
+                    if (this.hasMore) {
+                        this.page += 1;
+                        this.loadLogs();
+                    }
+                }
+            },
+
+            mounted() {
+                this.checkAuth().then(isAuthenticated => {
+                    if (isAuthenticated && this.user?.is_admin) {
+                        this.loadLogs();
+                    }
+                });
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

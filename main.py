@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 import uvicorn
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 import logging
 
 from api.auth import router as auth_router
@@ -12,9 +12,10 @@ from api.source import router as source_router
 from api.torrent import router as torrent_router
 from api.user import router as user_router
 from api.cache import router as cache_router
+from api.logs import router as logs_router
+from core.logging_config import configure_logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 from utils.dht import dht_service
@@ -58,6 +59,7 @@ app.include_router(source_router, prefix="/api/source")
 app.include_router(torrent_router, prefix="/api/torrent")
 app.include_router(user_router, prefix="/api/user")
 app.include_router(cache_router, prefix="/api/cache")
+app.include_router(logs_router, prefix="/api/logs")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -100,6 +102,11 @@ async def source_detail_page(request: Request):
     """Serve the source detail page"""
     return templates.TemplateResponse("source.html", {"request": request})
 
+@app.get("/logs.html", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    """Serve the logs page"""
+    return templates.TemplateResponse("logs.html", {"request": request})
+
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def catch_all(request: Request, full_path: str):
     """Catch-all route for SPA routing - serves main page for non-API routes"""
@@ -120,5 +127,3 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
-
-

@@ -11,6 +11,7 @@ class AnalyzeSourceRequest(BaseModel):
 class AnalyzeSourceResponse(BaseModel):
     title: Optional[str] = None
     error: Optional[str] = None
+    warning: Optional[str] = None
     tmdb_results: Optional[List[Dict]] = None
 
 # TMDB相关模型

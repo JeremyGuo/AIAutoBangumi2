@@ -1,12 +1,10 @@
-from typing import List, Tuple
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from models.session import get_db
-from models.models import User, Torrent, Source
+from models.models import User, Source
 
 from core.user import get_current_user, get_current_admin_user
 from core.sources import get_all_sources
@@ -16,12 +14,10 @@ from schemas.source import SourceBase, AnalyzeSourceResponse, AnalyzeSourceReque
 import logging
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 logger = logging.getLogger("api.source")
 
 @router.get("/", response_class=JSONResponse)
 async def list_sources(
-    request: Request,
     start: int = 0,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
@@ -99,7 +95,6 @@ async def get_source_detail(
 
 @router.post("/create")
 async def create_source(
-    request: Request,
     source_in: SourceBase,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_admin_user)
@@ -124,14 +119,21 @@ async def analyze_source(
     """分析来源URL，返回标题和TMDB匹配结果"""
     from utils.tmdb import analyze_source
     logging.info(f"分析来源: {request.url} 类型: {request.type}")
-    result = await analyze_source(
-        url=str(request.url),
-        source_type=request.type
-    )
-    if not result:
+    try:
+        result = await analyze_source(
+            url=str(request.url),
+            source_type=request.type
+        )
+    except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无法分析来源URL"
+            detail=str(e)
+        )
+
+    if not result or result.error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.error if result else "无法分析来源URL"
         )
     return result
 
@@ -143,7 +145,12 @@ async def get_tmdb_tv_details(
     """获取TMDB TV剧的详细信息，包括季度和剧集信息"""
     from utils.tmdb import get_tmdb_tv_details
     logging.info(f"获取TMDB TV详情: {tmdb_id}")
-    result = await get_tmdb_tv_details(tmdb_id)
+    try:
+        result = await get_tmdb_tv_details(tmdb_id, raise_on_error=True)
+    except RuntimeError as e:
+        message = str(e)
+        status_code = status.HTTP_400_BAD_REQUEST if "未启用" in message else status.HTTP_502_BAD_GATEWAY
+        raise HTTPException(status_code=status_code, detail=message)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -177,7 +184,6 @@ async def delete_source(
 @router.post("/{source_id}/reset-check", response_model=dict)
 async def reset_source_check_time(
     source_id: int,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_admin_user)
 ):
@@ -202,7 +208,6 @@ async def reset_source_check_time(
 
 @router.post("/generate-regex", response_model=dict)
 async def generate_episode_regex(
-    request: Request,
     url: str = Form(...),
     source_type: str = Form(...),
     db: AsyncSession = Depends(get_db),
