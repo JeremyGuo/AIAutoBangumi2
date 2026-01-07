@@ -390,28 +390,31 @@
                                 v-model="sourceForm.url" 
                                 type="url" 
                                 class="form-input" 
-                                placeholder="输入RSS源URL或磁力链接"
+                                placeholder="输入RSS源URL、磁力链接或种子文件URL"
                                 required
+                                @input="onUrlChange"
                             >
-                            <div class="help-text">支持RSS源和磁力链接</div>
+                            <div class="help-text">支持RSS源、磁力链接和.torrent种子文件</div>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">源类型</label>
-                            <select v-model="sourceForm.type" class="form-select" required>
-                                <option value="">请选择类型</option>
-                                <option value="rss">RSS</option>
-                                <option value="magnet">磁力链接</option>
-                            </select>
+                            <label class="form-label">源类型（自动识别）</label>
+                            <input 
+                                type="text" 
+                                class="form-input" 
+                                :value="sourceTypeLabel"
+                                disabled
+                            >
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">媒体类型</label>
-                            <select v-model="sourceForm.media_type" class="form-select" required>
-                                <option value="">请选择媒体类型</option>
-                                <option value="tv">电视剧/动画</option>
-                                <option value="movie">电影</option>
-                            </select>
+                            <label class="form-label">媒体类型（由TMDB决定）</label>
+                            <input 
+                                type="text" 
+                                class="form-input" 
+                                :value="mediaTypeLabel"
+                                disabled
+                            >
                         </div>
 
                         <div class="form-actions">
@@ -467,6 +470,21 @@
                                 <div class="error">
                                     未找到TMDB匹配结果，请手动输入标题或返回上一步修改源URL
                                 </div>
+                                <div v-if="attemptedTitles.length" class="help-text" style="margin-top: 10px;">
+                                    已尝试的标题：{{ attemptedTitles.join('、') }}
+                                </div>
+                                <div class="form-group" style="margin-top: 12px;">
+                                    <label class="form-label">手动输入标题并搜索TMDB</label>
+                                    <input 
+                                        v-model="manualTitle" 
+                                        type="text" 
+                                        class="form-input" 
+                                        placeholder="输入你认为正确的标题"
+                                    >
+                                </div>
+                                <button class="btn btn-primary" @click="searchTMDBTitle" :disabled="!manualTitle">
+                                    重新搜索TMDB
+                                </button>
                             </div>
 
                             <div class="form-actions">
@@ -517,6 +535,20 @@
                                 >
                                 <div class="help-text">当源中的剧集编号与实际不符时使用</div>
                             </div>
+                        </div>
+
+                        <div v-if="sourceForm.media_type === 'tv'" class="form-group">
+                            <label class="form-label">多季度种子</label>
+                            <div class="checkbox-group">
+                                <input 
+                                    v-model="sourceForm.multi_season" 
+                                    type="checkbox" 
+                                    class="checkbox"
+                                    id="multi_season"
+                                >
+                                <label class="checkbox-label" for="multi_season">该种子包含多个季度</label>
+                            </div>
+                            <div class="help-text">未设置季度时将自动识别；已设置季度则优先使用该季度。</div>
                         </div>
 
                         <div v-if="sourceForm.media_type === 'tv'" class="form-group">
@@ -595,6 +627,7 @@
                         media_type: '',
                         title: '',
                         season: null,
+                        multi_season: false,
                         episode_offset: 0,
                         episode_regex: '',
                         use_ai_episode: false,
@@ -604,13 +637,21 @@
                     tmdbResults: [],
                     selectedTMDB: null,
                     tmdbDetails: null,
-                    loadingTMDBDetails: false
+                    loadingTMDBDetails: false,
+                    attemptedTitles: [],
+                    manualTitle: '',
+                    sourceTypeLabel: '未识别'
                 }
             },
             
             computed: {
                 canAnalyze() {
-                    return this.sourceForm.url && this.sourceForm.type && this.sourceForm.media_type;
+                    return this.sourceForm.url && this.sourceForm.type;
+                },
+
+                mediaTypeLabel() {
+                    if (!this.sourceForm.media_type) return '未选择';
+                    return this.sourceForm.media_type === 'tv' ? '电视剧/动画' : '电影';
                 },
                 
                 availableSeasons() {
@@ -638,6 +679,7 @@
                         this.analyzing = true;
                         this.error = null;
                         this.warning = null;
+                        this.attemptedTitles = [];
                         
                         const response = await axios.post('/api/source/analyze', {
                             url: this.sourceForm.url,
@@ -652,9 +694,18 @@
                         if (response.data.tmdb_results) {
                             this.tmdbResults = response.data.tmdb_results;
                         }
+                        this.selectedTMDB = null;
 
                         if (response.data.warning) {
                             this.warning = response.data.warning;
+                        }
+
+                        if (response.data.attempted_titles) {
+                            this.attemptedTitles = response.data.attempted_titles;
+                        }
+
+                        if (!this.tmdbResults || this.tmdbResults.length === 0) {
+                            this.manualTitle = this.sourceForm.title || '';
                         }
                         
                         this.currentStep = 2;
@@ -666,10 +717,32 @@
                         this.analyzing = false;
                     }
                 },
+
+                async searchTMDBTitle() {
+                    try {
+                        this.error = null;
+                        this.warning = null;
+                        this.selectedTMDB = null;
+                        const response = await axios.get('/api/source/tmdb/search', {
+                            params: { title: this.manualTitle }
+                        });
+                        this.tmdbResults = response.data.results || [];
+                        if (this.tmdbResults.length > 0) {
+                            this.sourceForm.title = this.manualTitle;
+                        }
+                        if (this.tmdbResults.length === 0) {
+                            this.error = '仍未找到TMDB匹配结果，请尝试其他标题';
+                        }
+                    } catch (error) {
+                        console.error('搜索TMDB失败:', error);
+                        this.error = error.response?.data?.detail || '搜索TMDB失败';
+                    }
+                },
                 
                 selectTMDBResult(result) {
                     this.selectedTMDB = result;
                     this.sourceForm.title = result.title;
+                    this.sourceForm.media_type = result.type;
                     // 如果是TV剧，获取详细信息
                     if (result.type === 'tv') {
                         this.getTMDBDetails(result.id);
@@ -765,6 +838,28 @@
                     } finally {
                         this.creating = false;
                     }
+                },
+
+                onUrlChange() {
+                    const url = (this.sourceForm.url || '').trim();
+                    const lower = url.toLowerCase();
+                    if (!url) {
+                        this.sourceForm.type = '';
+                        this.sourceTypeLabel = '未识别';
+                        return;
+                    }
+                    if (lower.startsWith('magnet:')) {
+                        this.sourceForm.type = 'magnet';
+                        this.sourceTypeLabel = '磁力链接';
+                        return;
+                    }
+                    if (lower.includes('.torrent')) {
+                        this.sourceForm.type = 'magnet';
+                        this.sourceTypeLabel = '种子文件';
+                        return;
+                    }
+                    this.sourceForm.type = 'rss';
+                    this.sourceTypeLabel = 'RSS';
                 }
             }
         }).mount('#app');

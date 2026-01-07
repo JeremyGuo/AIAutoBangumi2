@@ -422,6 +422,7 @@ class AutoBangumiScheduler:
             file_name = file_info.get("name", "")
             file_path = file_info.get("path") or file_info.get("name", "")
             file_size = file_info.get("size", 0)
+            full_path = self._resolve_full_path(file_path)
             
             # 判断文件是否重要
             is_important, is_main_episode, is_video = await is_file_important(file_name)
@@ -449,6 +450,8 @@ class AutoBangumiScheduler:
                 if episode:
                     file_record.extracted_episode = episode
                     file_record.final_episode = episode + source.episode_offset
+
+                await self._resolve_season_for_file(source, file_record, full_path)
             
             db.add(file_record)
             
@@ -525,6 +528,9 @@ class AutoBangumiScheduler:
             
             # 获取文件扩展名和基本名称
             file_basename, file_ext = os.path.splitext(source_path)
+
+            if source.media_type == "tv":
+                await self._resolve_season_for_file(source, file_record, source_path)
             
             # 根据媒体类型和文件类型构建目标路径
             dest_path = await self._build_hardlink_path(source, file_record, file_ext)
@@ -589,7 +595,7 @@ class AutoBangumiScheduler:
         try:
             if source.media_type == "tv":
                 # 对于电视剧
-                season = source.season or 1
+                season = file_record.final_season or source.season or 1
                 episode = file_record.final_episode
                 
                 if episode is None:
@@ -659,6 +665,32 @@ class AutoBangumiScheduler:
         except Exception as e:
             logger.error(f"构建硬链接路径失败: {e}")
             return None
+
+    def _resolve_full_path(self, file_path: str) -> str:
+        if os.path.isabs(file_path):
+            return file_path
+        if hasattr(CONFIG.download, 'download_dir') and CONFIG.download.download_dir:
+            return os.path.join(CONFIG.download.download_dir, file_path)
+        return file_path
+
+    async def _resolve_season_for_file(self, source: Source, file_record: File, full_path: str) -> None:
+        if source.media_type != "tv":
+            return
+        if source.season is not None:
+            file_record.final_season = source.season
+            return
+
+        if not source.multi_season:
+            file_record.final_season = 1
+            return
+
+        from utils.ai import get_season_from_path
+        extracted_season = await get_season_from_path(full_path)
+        if extracted_season > 0:
+            file_record.extracted_season = extracted_season
+            file_record.final_season = extracted_season
+        else:
+            file_record.final_season = 1
     
     async def _check_hardlink_conflicts(self, db: Any, dest_path: str, current_file_id: int) -> Optional[str]:
         """检查硬链接冲突"""

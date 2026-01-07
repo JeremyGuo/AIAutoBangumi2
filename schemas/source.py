@@ -5,13 +5,14 @@ from datetime import datetime
 # API请求模型
 class AnalyzeSourceRequest(BaseModel):
     url: str
-    type: str
+    type: Optional[str] = None
 
 # Source分析响应
 class AnalyzeSourceResponse(BaseModel):
     title: Optional[str] = None
     error: Optional[str] = None
     warning: Optional[str] = None
+    attempted_titles: Optional[List[str]] = None
     tmdb_results: Optional[List[Dict]] = None
 
 # TMDB相关模型
@@ -33,6 +34,7 @@ class SourceResponse(BaseModel):
     title: str
     media_type: str
     season: Optional[int] = None
+    multi_season: bool = False
     episode_offset: int
     episode_regex: Optional[str] = None
     use_ai_episode: bool
@@ -46,10 +48,11 @@ class SourceResponse(BaseModel):
 # 基础Source模型
 class SourceBase(BaseModel):
     url: str
-    type: str
+    type: Optional[str] = None
     title: str
     media_type: str
     season: Optional[int] = None
+    multi_season: bool = False
     episode_offset: int = 0
     episode_regex: Optional[str] = None
     use_ai_episode: bool = False
@@ -68,6 +71,7 @@ class SourceCreationResponse(BaseModel):
 class SourceUpdate(BaseModel):
     title: Optional[str] = None
     season: Optional[int] = None
+    multi_season: Optional[bool] = None
     episode_offset: Optional[int] = None
     episode_regex: Optional[str] = None
     use_ai_episode: Optional[bool] = None

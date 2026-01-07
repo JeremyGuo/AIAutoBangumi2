@@ -22,65 +22,66 @@ async def search_tmdb(title: str, raise_on_error: bool = False) -> List[Dict]:
                 raise RuntimeError(message)
             return []
         
-        # TMDB API搜索端点
         search_url = "https://api.themoviedb.org/3/search/multi"
-        
-        # 请求头，包含认证信息
         headers = {
             'Authorization': f'Bearer {config.tmdb_api.api_key}',
             'accept': 'application/json'
         }
-        
-        # 查询参数
-        params = {
-            'query': title,
-            'language': 'zh-CN',  # 中文结果
-            'include_adult': 'true',  # 包含成人内容
-        }
-        
-        # 设置代理
-        proxy = None
-        if config.general.http_proxy:
-            proxy = config.general.http_proxy
-        
-        # 发起HTTP请求
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                search_url, 
-                headers=headers, 
-                params=params,
-                proxy=proxy,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    results = data.get('results', [])
-                    
-                    # 处理结果，转换为我们需要的格式
-                    processed_results = []
-                    for item in results:
-                        processed_item = {
-                            'id': str(item.get('id')),  # 确保ID为字符串
-                            'title': item.get('title') or item.get('name'),
-                            'original_title': item.get('original_title') or item.get('original_name'),
-                            'type': 'movie' if item.get('media_type') == 'movie' else 'tv',
-                            'overview': item.get('overview'),
-                            'first_air_date': item.get('first_air_date'),
-                            'release_date': item.get('release_date'),
-                            'poster_path': item.get('poster_path'),
-                            'vote_average': item.get('vote_average'),
-                            'popularity': item.get('popularity')
-                        }
-                        processed_results.append(processed_item)
-                    
-                    logger.info(f"TMDB搜索 '{title}' 返回 {len(processed_results)} 个结果")
-                    return processed_results
-                else:
+        proxy = config.general.http_proxy if config.general.http_proxy else None
+
+        async def fetch_results(language: str | None) -> List[Dict]:
+            params = {
+                'query': title,
+                'include_adult': 'true',
+            }
+            if language:
+                params['language'] = language
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    search_url,
+                    headers=headers,
+                    params=params,
+                    proxy=proxy,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get('results', [])
                     message = f"TMDB请求失败: HTTP {response.status}"
                     logger.error(message)
                     if raise_on_error:
                         raise RuntimeError(message)
                     return []
+
+        languages = ["zh-CN", "en-US", None]
+        merged: dict[tuple[str, str], Dict] = {}
+        for lang in languages:
+            results = await fetch_results(lang)
+            if not results:
+                continue
+            for item in results:
+                media_type = item.get('media_type') or item.get('media_type', 'tv')
+                key = (str(item.get('id')), str(media_type))
+                merged[key] = item
+
+        processed_results = []
+        for item in merged.values():
+            processed_item = {
+                'id': str(item.get('id')),
+                'title': item.get('title') or item.get('name'),
+                'original_title': item.get('original_title') or item.get('original_name'),
+                'type': 'movie' if item.get('media_type') == 'movie' else 'tv',
+                'overview': item.get('overview'),
+                'first_air_date': item.get('first_air_date'),
+                'release_date': item.get('release_date'),
+                'poster_path': item.get('poster_path'),
+                'vote_average': item.get('vote_average'),
+                'popularity': item.get('popularity')
+            }
+            processed_results.append(processed_item)
+
+        logger.info(f"TMDB搜索 '{title}' 返回 {len(processed_results)} 个结果")
+        return processed_results
                     
     except asyncio.TimeoutError:
         message = "TMDB请求超时"
@@ -194,6 +195,7 @@ async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
 
     cleaned_title = None
     warning = None
+    attempted_titles: list[str] = []
     
     try:
         if source_type == "rss":
@@ -202,20 +204,26 @@ async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
             dirty_title = await get_rss_title(url, rss_data)
             if not dirty_title:
                 return AnalyzeSourceResponse(error="无法从RSS源获取标题")
+            attempted_titles.append(dirty_title)
             from utils.ai import get_cleaned_title
             cleaned_title = await get_cleaned_title(dirty_title)
             if not cleaned_title:
                 return AnalyzeSourceResponse(error=f"无法清理标题 {dirty_title}")
+            if cleaned_title not in attempted_titles:
+                attempted_titles.append(cleaned_title)
             logging.info(f"清理后的标题: {cleaned_title}")
         elif source_type == "magnet":
             # 对于磁力链接，可以尝试从链接中提取标题
             # 这里可以添加磁力链接标题提取逻辑
             from utils.magnet import extract_title_from_torrent
             dirty_title = await extract_title_from_torrent(url, raise_on_error=True)
+            attempted_titles.append(dirty_title)
             from utils.ai import get_cleaned_title
             cleaned_title = await get_cleaned_title(dirty_title)
             if not cleaned_title:
                 return AnalyzeSourceResponse(error=f"无法清理标题 {dirty_title}")
+            if cleaned_title not in attempted_titles:
+                attempted_titles.append(cleaned_title)
         else:
             return AnalyzeSourceResponse(error=f"不支持的源类型: {source_type}")
         
@@ -230,7 +238,8 @@ async def analyze_source(url: str, source_type: str) -> AnalyzeSourceResponse:
         return AnalyzeSourceResponse(
             title=cleaned_title,
             tmdb_results=tmdb_results,
-            warning=warning
+            warning=warning,
+            attempted_titles=attempted_titles
         )
         
     except Exception as e:

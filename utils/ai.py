@@ -516,3 +516,80 @@ async def _fallback_episode_extraction(filename: str) -> int:
     except Exception as e:
         logging.error(f"备用剧集提取失败 {filename}: {e}")
         return 0
+
+
+async def get_season_from_path(path: str) -> int:
+    """
+    从完整文件路径中提取季号
+    """
+    try:
+        if CONFIG.llm.enable:
+            season = await _get_season_with_ai(path)
+            if season > 0:
+                return season
+        return _get_season_with_rules(path)
+    except Exception as e:
+        logging.error(f"季号提取失败 {path}: {e}")
+        return _get_season_with_rules(path)
+
+
+async def _get_season_with_ai(path: str) -> int:
+    """
+    使用AI从完整路径中提取季号
+    """
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一个专业的媒体文件路径解析助手，需要从路径中提取季度编号。"
+        },
+        {
+            "role": "user",
+            "content": f"""请从下面的完整文件路径中提取季号。
+
+路径: {path}
+
+规则:
+1. 返回季号的数字部分，比如 S02 -> 2, Season 3 -> 3, 第4季 -> 4
+2. 如果无法确定季号，返回 0
+3. 只返回JSON，不要额外文本
+
+JSON格式:
+{{\"season\": 数字或0, \"reason\": \"简短理由\"}}"""
+        }
+    ]
+
+    result = await call_llm_api(messages)
+    if result:
+        try:
+            json_match = re.search(r'\{.*\}', result, re.DOTALL)
+            if json_match:
+                analysis = json.loads(json_match.group())
+                season = analysis.get("season", 0)
+                if isinstance(season, int) and 1 <= season <= 99:
+                    return season
+        except (json.JSONDecodeError, KeyError) as e:
+            logging.warning(f"AI季号解析失败: {e}, 回复内容: {result}")
+    return 0
+
+
+def _get_season_with_rules(path: str) -> int:
+    """
+    使用规则从路径中提取季号
+    """
+    try:
+        cleaned = path.replace("_", " ").replace(".", " ").replace("-", " ")
+        patterns = [
+            r'[Ss](\d{1,2})',
+            r'Season\s*(\d{1,2})',
+            r'第(\d{1,2})季',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, cleaned, re.IGNORECASE)
+            if match:
+                season = int(match.group(1))
+                if 1 <= season <= 99:
+                    return season
+        return 0
+    except Exception as e:
+        logging.error(f"规则季号提取失败 {path}: {e}")
+        return 0

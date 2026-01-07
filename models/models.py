@@ -20,6 +20,7 @@ class Source(Base):
     
     # 季度
     season: Mapped[int | None] = mapped_column(nullable=True)  # 季度（仅用于剧集）
+    multi_season: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否多季度种子
     
     # 剧集提取方式
     use_ai_episode: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否使用AI提取剧集
@@ -79,6 +80,8 @@ class File(Base):
     # 剧集信息
     extracted_episode: Mapped[int | None] = mapped_column(nullable=True)  # 提取的剧集
     final_episode: Mapped[int | None] = mapped_column(nullable=True)  # 最终使用的剧集
+    extracted_season: Mapped[int | None] = mapped_column(nullable=True)  # 提取的季号
+    final_season: Mapped[int | None] = mapped_column(nullable=True)  # 最终使用的季号
     
     # 硬链接相关
     hardlink_path: Mapped[str | None] = mapped_column(nullable=True)

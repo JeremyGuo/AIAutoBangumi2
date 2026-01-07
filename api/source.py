@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Form, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -15,6 +15,15 @@ import logging
 
 router = APIRouter()
 logger = logging.getLogger("api.source")
+
+
+def _detect_source_type(url: str) -> str:
+    url_lower = url.lower().strip()
+    if url_lower.startswith("magnet:"):
+        return "magnet"
+    if ".torrent" in url_lower:
+        return "magnet"
+    return "rss"
 
 @router.get("/", response_class=JSONResponse)
 async def list_sources(
@@ -44,6 +53,7 @@ async def list_sources(
                     "title": source.title,
                     "media_type": source.media_type,
                     "season": source.season,
+                    "multi_season": source.multi_season,
                     "episode_offset": source.episode_offset,
                     "episode_regex": source.episode_regex,
                     "use_ai_episode": source.use_ai_episode,
@@ -82,6 +92,7 @@ async def get_source_detail(
             "title": source.title,
             "media_type": source.media_type,
             "season": source.season,
+            "multi_season": source.multi_season,
             "episode_offset": source.episode_offset,
             "episode_regex": source.episode_regex,
             "use_ai_episode": source.use_ai_episode,
@@ -101,7 +112,10 @@ async def create_source(
 ):
     """创建新的来源"""
     logging.info(f"创建新的来源: {source_in}")
-    new_source = Source(**source_in.model_dump())
+    source_data = source_in.model_dump()
+    if not source_data.get("type"):
+        source_data["type"] = _detect_source_type(source_in.url)
+    new_source = Source(**source_data)
     db.add(new_source)
     await db.commit()
     await db.refresh(new_source)
@@ -118,11 +132,12 @@ async def analyze_source(
 ):
     """分析来源URL，返回标题和TMDB匹配结果"""
     from utils.tmdb import analyze_source
-    logging.info(f"分析来源: {request.url} 类型: {request.type}")
+    source_type = request.type or _detect_source_type(request.url)
+    logging.info(f"分析来源: {request.url} 类型: {source_type}")
     try:
         result = await analyze_source(
             url=str(request.url),
-            source_type=request.type
+            source_type=source_type
         )
     except RuntimeError as e:
         raise HTTPException(
@@ -136,6 +151,24 @@ async def analyze_source(
             detail=result.error if result else "无法分析来源URL"
         )
     return result
+
+@router.get("/tmdb/search")
+async def search_tmdb_title(
+    title: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """根据标题搜索TMDB"""
+    from utils.tmdb import search_tmdb
+    try:
+        results = await search_tmdb(title, raise_on_error=True)
+    except RuntimeError as e:
+        message = str(e)
+        status_code = status.HTTP_400_BAD_REQUEST if "未启用" in message else status.HTTP_502_BAD_GATEWAY
+        raise HTTPException(status_code=status_code, detail=message)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": "success", "results": results}
+    )
 
 @router.get("/tmdb/{tmdb_id}")
 async def get_tmdb_tv_details(
